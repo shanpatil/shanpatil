@@ -1,33 +1,52 @@
-pipeline {
-    agent any
-
-    triggers {
-        pollSCM '* * * * *'
+pipeline { 
+    environment { 
+        registry = "shankarpatil1/assignment2" 
+        registryCredential = 'docker-hub' 
+        dockerImage = '' 
     }
-    stages {
-        stage('Build') {
-            steps {
-                sh './gradlew assemble'
+    agent any 
+    stages { 
+        stage('Cloning Git') { 
+            steps { 
+                git (url: 'https://github.com/shanpatil/shanpatil.git', credentialsId: '63e7cf28-cc28-4865-8a15-2ab1e5a52237', branch:"main")
             }
         }
-        stage('Test') {
-            steps {
-                sh './gradlew test'
+		stage('Build the code') { 
+            steps { 
+                script { 
+                    sh 'mvn clean install'
+                }
+            } 
+        }
+        stage('Building image') { 
+            steps { 
+                script { 
+                    dockerImage = docker.build registry + ":$BUILD_NUMBER" 
+                }
+            } 
+        }
+        stage('Push image') { 
+            steps { 
+                script { 
+                    docker.withRegistry( '', registryCredential ) { 
+                        dockerImage.push() 
+                    }
+                } 
             }
         }
-        stage('Build Docker image') {
-            steps {
-                sh './gradlew docker'
+		stage('Pull image') { 
+            steps { 
+                script { 
+                    docker.withRegistry( '', registryCredential ) { 
+                        dockerImage.pull() 
+                    }
+                } 
             }
         }
-        stage('Push Docker image') {
-            environment {
-                DOCKER_HUB_LOGIN = credentials('docker-hub')
+        stage('Cleaning up') { 
+            steps { 
+                sh "docker rmi $registry:$BUILD_NUMBER" 
             }
-            steps {
-                sh 'docker login --username=$DOCKER_HUB_LOGIN_USR --password=$DOCKER_HUB_LOGIN_PSW'
-                sh './gradlew dockerPush'
-            }
-        }
+        } 
     }
 }
